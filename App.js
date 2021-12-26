@@ -3,8 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import * as Font from 'expo-font';
-import { ActivityIndicator, View } from 'react-native';
+import {
+  ActivityIndicator, Alert, Platform, View,
+} from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
+import * as Permissions from 'expo-permissions';
 import Token from './helpers/Token';
 import UserInfoContex from './helpers/Contex';
 import MainContainer from './navigation/MainContainer';
@@ -43,6 +46,14 @@ function App() {
       ...prev,
       refreshToken: refToken,
     }));
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status } = await Permissions.askAsync(Permissions.CAMERA);
+        if (status !== 'granted') {
+          Alert('Sorry, we need camera roll permissions to make this work!');
+        }
+      }
+    })();
   }, []);
 
   if (!isFontLoaded) {

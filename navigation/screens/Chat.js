@@ -1,6 +1,7 @@
 import React, {
   useContext, useEffect, useRef, useState,
 } from 'react';
+import socket from 'socket.io-client';
 import {
   ActivityIndicator,
   StatusBar, StyleSheet, Text, TouchableOpacity, View, ImageBackground, Keyboard,
@@ -25,7 +26,8 @@ export default function Chat({ navigation, route }) {
   const [roomid] = useState(route.params.roomid);
   const [userinfo, setUserinfo] = useContext(UserInfoContex);
   const [roomInfo, setRoomInfo] = useState(null);
-  const [messages, setMessage] = useState(null);
+  const [messages, setMessage] = useState([]);
+  const io = socket.connect(CONFIG.BASEURL, { transports: ['websocket'] });
 
   const { handleSubmit, control, reset } = useForm();
   const scrollViewRef = useRef();
@@ -37,8 +39,10 @@ export default function Chat({ navigation, route }) {
       Alert.alert('unable to send message');
     }
     setMessage([...messages, req.data]);
+    io.emit('chatMsg', req.data);
     reset({ message: '' });
   };
+
   const keyboardWillHide = () => {
     Keyboard.dismiss();
   };
@@ -57,15 +61,30 @@ export default function Chat({ navigation, route }) {
       const { data: { fileLocation } } = await fetchAPI.uploadImage(formdata);
       const req = await fetchAPI.PostMessage(accToken, userinfo.refreshToken, roomid, 'image', fileLocation, userinfo.owner);
       setMessage([...messages, req.data]);
+      io.emit('chatMsg', req.data);
     }
   };
+
+  useEffect(() => {
+    io.on('connect', () => {
+      console.log('socket connceted');
+    });
+    io.emit('joinRoom', { roomid });
+    io.on('msg', (msg) => {
+      setMessage([...messages, msg]);
+    });
+
+    return (() => {
+      io.disconnect();
+    });
+  }, [messages.length]);
 
   useEffect(async () => {
     const accToken = await Token.Get('accessToken');
     const { data } = await fetchAPI.RoomChat(roomid, accToken, userinfo.refreshToken);
-    setRoomInfo(data);
     setMessage(data.messages);
-  }, []);
+    setRoomInfo(data);
+  }, [messages.length]);
 
   if (!roomInfo) {
     return (
@@ -81,7 +100,6 @@ export default function Chat({ navigation, route }) {
     participant,
     participantProfileUrl,
   } = roomInfo;
-  console.log('rerender');
   return (
     <View style={styles.container}>
       <ImageBackground source={require('../../assets/background.jpeg')} style={styles.imageContainer}>
@@ -165,6 +183,7 @@ export default function Chat({ navigation, route }) {
                 </View>
               ) : (
                 <View
+                  key={msg.timestamp}
                   style={[styles.imageMsgContainer,
                     msg.sender === userinfo.owner ? styles.reciver : styles.sender]}
                 >
